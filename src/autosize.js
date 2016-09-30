@@ -1,234 +1,235 @@
-const set = (typeof Set === "function") ? new Set() : (function () {
-	const list = [];
-
-	return {
-		has(key) {
-			return Boolean(list.indexOf(key) > -1);
-		},
-		add(key) {
-			list.push(key);
-		},
-		delete(key) {
-			list.splice(list.indexOf(key), 1);
-		},
+/*!
+	Autosize 3.0.5
+	license: MIT
+	http://www.jacklmoore.com/autosize
+*/
+(function (global, factory) {
+	if (typeof define === 'function' && define.amd) {
+		define(['exports', 'module'], factory);
+	} else if (typeof exports !== 'undefined' && typeof module !== 'undefined') {
+		factory(exports, module);
+	} else {
+		var mod = {
+			exports: {}
+		};
+		factory(mod.exports, mod);
+		global.autosize = mod.exports;
 	}
-})();
+})(this, function (exports, module) {
+	'use strict';
 
-let createEvent = (name)=> new Event(name);
-try {
-	new Event('test');
-} catch(e) {
-	// IE does not support `new Event()`
-	createEvent = (name)=> {
-		const evt = document.createEvent('Event');
-		evt.initEvent(name, true, false);
-		return evt;
-	};
-}
+	function assign(ta) {
+		var _ref = arguments[1] === undefined ? {} : arguments[1];
 
-function assign(ta) {
-	if (!ta || !ta.nodeName || ta.nodeName !== 'TEXTAREA' || set.has(ta)) return;
+		var _ref$setOverflowX = _ref.setOverflowX;
+		var setOverflowX = _ref$setOverflowX === undefined ? true : _ref$setOverflowX;
+		var _ref$setOverflowY = _ref.setOverflowY;
+		var setOverflowY = _ref$setOverflowY === undefined ? true : _ref$setOverflowY;
 
-	let heightOffset = null;
-	let clientWidth = ta.clientWidth;
-	let cachedHeight = null;
+		if (!ta || !ta.nodeName || ta.nodeName !== 'TEXTAREA' || ta.hasAttribute('data-autosize-on')) return;
 
-	function init() {
-		const style = window.getComputedStyle(ta, null);
+		var heightOffset = null;
+		var overflowY = 'hidden';
 
-		if (style.resize === 'vertical') {
-			ta.style.resize = 'none';
-		} else if (style.resize === 'both') {
-			ta.style.resize = 'horizontal';
-		}
+		function init() {
+			var style = window.getComputedStyle(ta, null);
 
-		if (style.boxSizing === 'content-box') {
-			heightOffset = -(parseFloat(style.paddingTop)+parseFloat(style.paddingBottom));
-		} else {
-			heightOffset = parseFloat(style.borderTopWidth)+parseFloat(style.borderBottomWidth);
-		}
-		// Fix when a textarea is not on document body and heightOffset is Not a Number
-		if (isNaN(heightOffset)) {
-			heightOffset = 0;
-		}
-
-		update();
-	}
-
-	function changeOverflow(value) {
-		{
-			// Chrome/Safari-specific fix:
-			// When the textarea y-overflow is hidden, Chrome/Safari do not reflow the text to account for the space
-			// made available by removing the scrollbar. The following forces the necessary text reflow.
-			const width = ta.style.width;
-			ta.style.width = '0px';
-			// Force reflow:
-			/* jshint ignore:start */
-			ta.offsetWidth;
-			/* jshint ignore:end */
-			ta.style.width = width;
-		}
-
-		ta.style.overflowY = value;
-
-		resize();
-	}
-
-	function getParentOverflows(el) {
-		const arr = [];
-
-		while (el && el.parentNode && el.parentNode instanceof Element) {
-			if (el.parentNode.scrollTop) {
-				arr.push({
-					node: el.parentNode,
-					scrollTop: el.parentNode.scrollTop,
-				})
+			if (style.resize === 'vertical') {
+				ta.style.resize = 'none';
+			} else if (style.resize === 'both') {
+				ta.style.resize = 'horizontal';
 			}
-			el = el.parentNode;
-		}
 
-		return arr;
-	}
-
-	function resize() {
-		const originalHeight = ta.style.height;
-		const overflows = getParentOverflows(ta);
-		const docTop = document.documentElement && document.documentElement.scrollTop; // Needed for Mobile IE (ticket #240)
-
-		ta.style.height = 'auto';
-
-		let endHeight = ta.scrollHeight+heightOffset;
-
-		if (ta.scrollHeight === 0) {
-			// If the scrollHeight is 0, then the element probably has display:none or is detached from the DOM.
-			ta.style.height = originalHeight;
-			return;
-		}
-
-		ta.style.height = endHeight+'px';
-
-		// used to check if an update is actually necessary on window.resize
-		clientWidth = ta.clientWidth;
-
-		// prevents scroll-position jumping
-		overflows.forEach(el => {
-			el.node.scrollTop = el.scrollTop
-		});
-
-		if (docTop) {
-			document.documentElement.scrollTop = docTop;
-		}
-	}
-
-	function update() {
-		resize();
-
-		const computed = window.getComputedStyle(ta, null);
-		const computedHeight = Math.round(parseFloat(computed.height));
-		const styleHeight = Math.round(parseFloat(ta.style.height));
-
-		// The computed height not matching the height set via resize indicates that 
-		// the max-height has been exceeded, in which case the overflow should be set to visible.
-		if (computedHeight !== styleHeight) {
-			if (computed.overflowY !== 'visible') {
-				changeOverflow('visible');
+			if (style.boxSizing === 'content-box') {
+				heightOffset = -(parseFloat(style.paddingTop) + parseFloat(style.paddingBottom));
+			} else {
+				heightOffset = parseFloat(style.borderTopWidth) + parseFloat(style.borderBottomWidth);
 			}
-		} else {
-			// Normally keep overflow set to hidden, to avoid flash of scrollbar as the textarea expands.
-			if (computed.overflowY !== 'hidden') {
-				changeOverflow('hidden');
-			}
-		}
 
-		if (cachedHeight !== computedHeight) {
-			cachedHeight = computedHeight;
-			const evt = createEvent('autosize:resized');
-			ta.dispatchEvent(evt);
-		}
-	}
+			//add callback when there is css transitions
+			ta.addEventListener('transitionend', transitionCalback, false);
 
-	const pageResize = () => {
-		if (ta.clientWidth !== clientWidth) {
 			update();
 		}
-	};
 
-	const destroy = style => {
-		window.removeEventListener('resize', pageResize, false);
-		ta.removeEventListener('input', update, false);
-		ta.removeEventListener('keyup', update, false);
-		ta.removeEventListener('autosize:destroy', destroy, false);
-		ta.removeEventListener('autosize:update', update, false);
-		set.delete(ta);
+		function transitionCalback() {
+			ta.style.overflowY = 'hidden';
+		}
 
-		Object.keys(style).forEach(key => {
-			ta.style[key] = style[key];
-		});
-	}.bind(ta, {
-		height: ta.style.height,
-		resize: ta.style.resize,
-		overflowY: ta.style.overflowY,
-		overflowX: ta.style.overflowX,
-		wordWrap: ta.style.wordWrap,
-	});
+		function getContentHeight() {
+			var lineHeight = parseInt($(ta).css('line-height'), 10);
+			var lines = ta.value.split('\n');
+			var columns = ta.cols;
+			var lineCount = 0;
+			$.each(lines, function() {
+				lineCount += Math.ceil(this.length / columns) || 1;
+			});
+			var contentHeight = lineHeight * (lineCount + 1);
+			return contentHeight;
+		}
 
-	ta.addEventListener('autosize:destroy', destroy, false);
+		function changeOverflow(value) {
+			{
+				// Chrome/Safari-specific fix:
+				// When the textarea y-overflow is hidden, Chrome/Safari do not reflow the text to account for the space
+				// made available by removing the scrollbar. The following forces the necessary text reflow.
+				var width = ta.style.width;
+				ta.style.width = '0px';
+				// Force reflow:
+				/* jshint ignore:start */
+				ta.offsetWidth;
+				/* jshint ignore:end */
+				ta.style.width = width;
+			}
 
-	// IE9 does not fire onpropertychange or oninput for deletions,
-	// so binding to onkeyup to catch most of those events.
-	// There is no way that I know of to detect something like 'cut' in IE9.
-	if ('onpropertychange' in ta && 'oninput' in ta) {
-		ta.addEventListener('keyup', update, false);
+			overflowY = value;
+
+			if (setOverflowY) {
+				ta.style.overflowY = value;
+			}
+
+			update();
+		}
+
+		function update() {
+
+			var startHeight = ta.style.height;
+			var htmlTop = document.documentElement.scrollTop;
+			var bodyTop = document.body.scrollTop;
+			var originalHeight = ta.style.height;
+
+			var contentHeigh = getContentHeight();
+
+			ta.style.overflowY = 'hidden';
+
+			ta.style.height = contentHeigh + heightOffset;
+
+			var endHeight = contentHeigh + heightOffset;
+
+			if (ta.scrollHeight === 0) {
+				// If the scrollHeight is 0, then the element probably has display:none or is detached from the DOM.
+				ta.style.height = originalHeight;
+				return;
+			}
+
+			ta.style.height = endHeight + 'px';
+
+			// prevents scroll-position jumping
+			document.documentElement.scrollTop = htmlTop;
+			document.body.scrollTop = bodyTop;
+
+			var style = window.getComputedStyle(ta, null);
+
+			if (style.height !== ta.style.height) {
+				if (overflowY !== 'visible') {
+					changeOverflow('visible');
+					return;
+				}
+			} else {
+				if (overflowY !== 'hidden') {
+					changeOverflow('hidden');
+					return;
+				}
+			}
+
+			if (startHeight !== ta.style.height) {
+				var evt = document.createEvent('Event');
+				evt.initEvent('autosize:resized', true, false);
+				ta.dispatchEvent(evt);
+			}
+		}
+
+		var destroy = (function (style) {
+			window.removeEventListener('resize', update);
+			ta.removeEventListener('input', update);
+			ta.removeEventListener('keyup', update);
+			ta.removeAttribute('data-autosize-on');
+			ta.removeEventListener('autosize:destroy', destroy);
+
+			Object.keys(style).forEach(function (key) {
+				ta.style[key] = style[key];
+			});
+		}).bind(ta, {
+			height: ta.style.height,
+			resize: ta.style.resize,
+			overflowY: ta.style.overflowY,
+			overflowX: ta.style.overflowX,
+			wordWrap: ta.style.wordWrap });
+
+		ta.addEventListener('autosize:destroy', destroy);
+
+		// IE9 does not fire onpropertychange or oninput for deletions,
+		// so binding to onkeyup to catch most of those events.
+		// There is no way that I know of to detect something like 'cut' in IE9.
+		if ('onpropertychange' in ta && 'oninput' in ta) {
+			ta.addEventListener('keyup', update);
+		}
+
+		window.addEventListener('resize', update);
+		ta.addEventListener('input', update);
+		ta.addEventListener('autosize:update', update);
+		ta.setAttribute('data-autosize-on', true);
+
+		if (setOverflowY) {
+			ta.style.overflowY = 'hidden';
+		}
+		if (setOverflowX) {
+			ta.style.overflowX = 'hidden';
+			ta.style.wordWrap = 'break-word';
+		}
+
+		init();
 	}
 
-	window.addEventListener('resize', pageResize, false);
-	ta.addEventListener('input', update, false);
-	ta.addEventListener('autosize:update', update, false);
-	set.add(ta);
-	ta.style.overflowX = 'hidden';
-	ta.style.wordWrap = 'break-word';
+	function destroy(ta) {
+		if (!(ta && ta.nodeName && ta.nodeName === 'TEXTAREA')) return;
+		var evt = document.createEvent('Event');
+		evt.initEvent('autosize:destroy', true, false);
+		ta.dispatchEvent(evt);
+	}
 
-	init();
-}
+	function update(ta) {
+		if (!(ta && ta.nodeName && ta.nodeName === 'TEXTAREA')) return;
+		var evt = document.createEvent('Event');
+		evt.initEvent('autosize:update', true, false);
+		ta.dispatchEvent(evt);
+	}
 
-function destroy(ta) {
-	if (!(ta && ta.nodeName && ta.nodeName === 'TEXTAREA')) return;
-	const evt = createEvent('autosize:destroy');
-	ta.dispatchEvent(evt);
-}
+	var autosize = null;
 
-function update(ta) {
-	if (!(ta && ta.nodeName && ta.nodeName === 'TEXTAREA')) return;
-	const evt = createEvent('autosize:update');
-	ta.dispatchEvent(evt);
-}
+	// Do nothing in Node.js environment and IE8 (or lower)
+	if (typeof window === 'undefined' || typeof window.getComputedStyle !== 'function') {
+		autosize = function (el) {
+			return el;
+		};
+		autosize.destroy = function (el) {
+			return el;
+		};
+		autosize.update = function (el) {
+			return el;
+		};
+	} else {
+		autosize = function (el, options) {
+			if (el) {
+				Array.prototype.forEach.call(el.length ? el : [el], function (x) {
+					return assign(x, options);
+				});
+			}
+			return el;
+		};
+		autosize.destroy = function (el) {
+			if (el) {
+				Array.prototype.forEach.call(el.length ? el : [el], destroy);
+			}
+			return el;
+		};
+		autosize.update = function (el) {
+			if (el) {
+				Array.prototype.forEach.call(el.length ? el : [el], update);
+			}
+			return el;
+		};
+	}
 
-let autosize = null;
-
-// Do nothing in Node.js environment and IE8 (or lower)
-if (typeof window === 'undefined' || typeof window.getComputedStyle !== 'function') {
-	autosize = el => el;
-	autosize.destroy = el => el;
-	autosize.update = el => el;
-} else {
-	autosize = (el, options) => {
-		if (el) {
-			Array.prototype.forEach.call(el.length ? el : [el], x => assign(x, options));
-		}
-		return el;
-	};
-	autosize.destroy = el => {
-		if (el) {
-			Array.prototype.forEach.call(el.length ? el : [el], destroy);
-		}
-		return el;
-	};
-	autosize.update = el => {
-		if (el) {
-			Array.prototype.forEach.call(el.length ? el : [el], update);
-		}
-		return el;
-	};
-}
-
-export default autosize;
+	module.exports = autosize;
+});
